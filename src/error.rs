@@ -8,6 +8,7 @@ pub enum Error {
     CurrentBranchInvalid,
     InvalidRemote,
     ExitEarly,
+    Config(String),
     Io(IoError),
 }
 
@@ -27,6 +28,7 @@ impl Display for Error {
         match *self {
             Io(ref io_error) => io_error.fmt(f),
             ExitEarly => Ok(()),
+            Config(ref message) => write!(f, "{}", message),
             GitInstallation => {
                 write!(f, "Unable to execute 'git' on your machine, please make sure it's installed and on your PATH")
             }

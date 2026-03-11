@@ -11,6 +11,7 @@ pub fn build_cli() -> Command {
                 .short('l')
                 .long("locals")
                 .help("Only delete local branches")
+                .conflicts_with("remotes")
                 .action(ArgAction::SetTrue),
         )
         .arg(
@@ -18,6 +19,7 @@ pub fn build_cli() -> Command {
                 .short('r')
                 .long("remotes")
                 .help("Only delete remote branches")
+                .conflicts_with("locals")
                 .action(ArgAction::SetTrue),
         )
         .arg(
@@ -62,5 +64,17 @@ pub fn build_cli() -> Command {
                 .help("Ignore given branch (repeat option for multiple branches)")
                 .num_args(1)
                 .action(ArgAction::Append),
+        )
+        .arg(
+            Arg::new("save-config")
+                .long("save-config")
+                .help("Save the command line flags used for this repository into ~/.config/git-clean/config.toml")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("ignore-config")
+                .long("ignore-config")
+                .help("Ignore per-repository config values for this run")
+                .action(ArgAction::SetTrue),
         )
 }

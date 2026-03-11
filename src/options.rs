@@ -1,12 +1,15 @@
-use clap::ArgMatches;
 use crate::commands::{output, run_command};
+use crate::config::{self, RepoConfig};
 use crate::error::Error;
+use clap::parser::ValueSource;
+use clap::ArgMatches;
 use regex::Regex;
+use std::path::Path;
 
 const DEFAULT_REMOTE: &str = "origin";
 const DEFAULT_BRANCH: &str = "main";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DeleteMode {
     Local,
     Remote,
@@ -45,28 +48,138 @@ pub struct Options {
     pub delete_mode: DeleteMode,
 }
 
+pub struct ResolvedOptions {
+    pub options: Options,
+    pub used_repo_config: bool,
+}
+
 impl Options {
+    #[cfg(test)]
     pub fn new(opts: &ArgMatches) -> Options {
-        let ignored = opts
-            .get_many::<String>("ignore")
-            .map(|i| i.cloned().collect::<Vec<String>>())
-            .unwrap_or_default();
-        Options {
-            remote: opts
-                .get_one::<String>("remote")
-                .map(String::as_str)
-                .unwrap_or(DEFAULT_REMOTE)
-                .into(),
-            base_branch: opts
-                .get_one::<String>("branch")
-                .map(String::as_str)
-                .unwrap_or(DEFAULT_BRANCH)
-                .into(),
-            ignored_branches: ignored,
-            squashes: opts.get_flag("squashes"),
-            delete_unpushed_branches: opts.get_flag("delete-unpushed-branches"),
-            delete_mode: DeleteMode::new(opts),
+        let mut options = Self::default();
+        options.apply_flag_overrides(opts);
+        options
+    }
+
+    pub fn with_repo_config(opts: &ArgMatches, repo_path: &Path) -> Result<ResolvedOptions, Error> {
+        let mut options = Self::default();
+        let mut used_repo_config = false;
+
+        if !opts.get_flag("ignore-config") {
+            if let Some(repo_config) = config::load_repo_config(repo_path)? {
+                repo_config.apply_to_options(&mut options);
+                used_repo_config = true;
+            }
         }
+
+        options.apply_flag_overrides(opts);
+        Ok(ResolvedOptions {
+            options,
+            used_repo_config,
+        })
+    }
+
+    pub fn save_cli_flags(opts: &ArgMatches, repo_path: &Path) -> Result<bool, Error> {
+        if !opts.get_flag("save-config") {
+            return Ok(false);
+        }
+
+        let patch = Self::config_patch_from_matches(opts);
+        if patch.is_empty() {
+            return Ok(false);
+        }
+
+        config::save_repo_config(repo_path, &patch)?;
+        Ok(true)
+    }
+
+    fn default() -> Options {
+        Options {
+            remote: DEFAULT_REMOTE.to_owned(),
+            base_branch: DEFAULT_BRANCH.to_owned(),
+            ignored_branches: Vec::new(),
+            squashes: false,
+            delete_unpushed_branches: false,
+            delete_mode: Both,
+        }
+    }
+
+    fn apply_flag_overrides(&mut self, opts: &ArgMatches) {
+        if let Some(remote) = opts.get_one::<String>("remote") {
+            self.remote = remote.clone();
+        }
+
+        if let Some(base_branch) = opts.get_one::<String>("branch") {
+            self.base_branch = base_branch.clone();
+        }
+
+        if let Some(ignored) = opts.get_many::<String>("ignore") {
+            self.ignored_branches = ignored.cloned().collect();
+        }
+
+        if opts.get_flag("squashes") {
+            self.squashes = true;
+        }
+
+        if opts.get_flag("delete-unpushed-branches") {
+            self.delete_unpushed_branches = true;
+        }
+
+        if opts.value_source("locals") == Some(ValueSource::CommandLine)
+            || opts.value_source("remotes") == Some(ValueSource::CommandLine)
+        {
+            self.delete_mode = DeleteMode::new(opts);
+        }
+    }
+
+    fn config_patch_from_matches(opts: &ArgMatches) -> RepoConfig {
+        let mut patch = RepoConfig::default();
+
+        if let Some(remote) = opts.get_one::<String>("remote") {
+            patch.remote = Some(remote.clone());
+        }
+
+        if let Some(branch) = opts.get_one::<String>("branch") {
+            patch.base_branch = Some(branch.clone());
+        }
+
+        if opts.get_flag("squashes") {
+            patch.squashes = Some(true);
+        }
+
+        if opts.get_flag("delete-unpushed-branches") {
+            patch.delete_unpushed_branches = Some(true);
+        }
+
+        if let Some(ignored) = opts.get_many::<String>("ignore") {
+            patch.ignored_branches = Some(ignored.cloned().collect());
+        }
+
+        if opts.value_source("locals") == Some(ValueSource::CommandLine)
+            || opts.value_source("remotes") == Some(ValueSource::CommandLine)
+        {
+            patch.delete_mode = Some(config::delete_mode_to_config(&DeleteMode::new(opts)));
+        }
+
+        patch
+    }
+
+    pub fn describe_effective(&self) -> String {
+        let delete_mode = match self.delete_mode {
+            Local => "local",
+            Remote => "remote",
+            Both => "both",
+        };
+
+        format!(
+            "remote={}\nbase_branch={}\nsquashes={}\ndelete_unpushed_branches={}\nignored_branches={:?}\ndelete_mode={}",
+            self.remote,
+            self.base_branch,
+            self.squashes,
+            self.delete_unpushed_branches,
+            self.ignored_branches,
+            delete_mode
+        )
     }
 
     pub fn validate(&self) -> Result<(), Error> {
@@ -109,8 +222,8 @@ impl Options {
 #[cfg(test)]
 mod test {
     use super::{DeleteMode, Options};
-    use clap;
     use crate::cli;
+    use clap;
 
     // Helpers
     fn parse_args(args: Vec<&str>) -> clap::ArgMatches {
@@ -208,5 +321,13 @@ mod test {
             git_options.ignored_branches,
             vec!["branch1", "branch2", "branch3"]
         );
+    }
+
+    #[test]
+    fn test_save_without_flags_is_noop() {
+        let matches = parse_args(vec!["git-clean", "--save-config"]);
+        let temp = tempfile::TempDir::new().unwrap();
+        let did_save = Options::save_cli_flags(&matches, temp.path()).unwrap();
+        assert!(!did_save);
     }
 }

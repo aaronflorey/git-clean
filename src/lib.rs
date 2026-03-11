@@ -10,6 +10,8 @@ use crate::branches::Branches;
 mod commands;
 pub use commands::validate_git_installation;
 
+mod config;
+
 mod error;
 use crate::error::Error;
 
@@ -19,7 +21,14 @@ use crate::options::Options;
 pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
     validate_git_installation()?;
 
-    let options = Options::new(matches);
+    let current_directory = std::env::current_dir()?;
+    let resolved = Options::with_repo_config(matches, &current_directory)?;
+    let options = resolved.options;
+    if resolved.used_repo_config {
+        println!("Using repository config (after CLI overrides):");
+        println!("{}", options.describe_effective());
+    }
+    Options::save_cli_flags(matches, &current_directory)?;
     options.validate()?;
 
     let branches = Branches::merged(&options);

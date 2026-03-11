@@ -1,6 +1,6 @@
 # git-clean
 
-[![Build Status](https://travis-ci.org/mcasper/git-clean.svg?branch=master)](https://travis-ci.org/mcasper/git-clean)
+[![CI](https://github.com/mcasper/git-clean/actions/workflows/ci.yml/badge.svg)](https://github.com/mcasper/git-clean/actions/workflows/ci.yml)
 
 # The Problem
 
@@ -93,8 +93,7 @@ If you're a Rust developer, you can install using Cargo:
 cargo install git-clean
 ```
 
-This was developed on Rust 1.14.0 stable, so if you're having issues with the
-compile/install step, make sure your Rust version is >= 1.14.0 stable.
+This project currently targets Rust 1.74+ stable.
 
 Be sure to add the installation path to your PATH variable. For me, it's
 downloaded to:
@@ -181,11 +180,36 @@ It also offers several options for tweaking what branches get deleted, where.
 - `-l` and `-r` toggle deleting branches only locally or only remotely
 - `-R` changes the git remote that remote branches are deleted in
 - `-b` changes the base branch for finding merged branches to delete
+- `--ignore-config` ignores the per-repository config file for the current run
 
 And other miscellaneous options:
 
 - `-y` overrides the delete branches check. Nice for automating workflows where
   you don't want to be prompted.
+- `--save-config` saves the flags used in this invocation to
+  `~/.config/git-clean/config.toml` for the current repository path.
+
+## Per-Repository Config
+
+`git-clean` supports optional per-repo defaults in
+`~/.config/git-clean/config.toml`.
+
+Command-line flags always take priority over config file values.
+
+Use `--save-config` to persist the flags from the current command for the
+current repository.
+
+Example:
+
+```toml
+["/Users/you/code/blah"]
+squashes = true
+delete_unpushed_branches = true
+remote = "origin"
+base_branch = "main"
+ignored_branches = ["release", "keep-me"]
+delete_mode = "both"
+```
 
 # Contributions
 

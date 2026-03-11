@@ -1,6 +1,6 @@
 use clap::ArgMatches;
-use commands::{output, run_command};
-use error::Error;
+use crate::commands::{output, run_command};
+use crate::error::Error;
 use regex::Regex;
 
 const DEFAULT_REMOTE: &str = "origin";
@@ -17,9 +17,9 @@ pub use self::DeleteMode::*;
 
 impl DeleteMode {
     pub fn new(opts: &ArgMatches) -> DeleteMode {
-        if opts.is_present("locals") {
+        if opts.get_flag("locals") {
             Local
-        } else if opts.is_present("remotes") {
+        } else if opts.get_flag("remotes") {
             Remote
         } else {
             Both
@@ -47,17 +47,24 @@ pub struct Options {
 
 impl Options {
     pub fn new(opts: &ArgMatches) -> Options {
-        let default_ignored = Vec::new();
         let ignored = opts
-            .values_of("ignore")
-            .map(|i| i.map(|v| v.to_owned()).collect::<Vec<String>>())
-            .unwrap_or(default_ignored);
+            .get_many::<String>("ignore")
+            .map(|i| i.cloned().collect::<Vec<String>>())
+            .unwrap_or_default();
         Options {
-            remote: opts.value_of("remote").unwrap_or(DEFAULT_REMOTE).into(),
-            base_branch: opts.value_of("branch").unwrap_or(DEFAULT_BRANCH).into(),
+            remote: opts
+                .get_one::<String>("remote")
+                .map(String::as_str)
+                .unwrap_or(DEFAULT_REMOTE)
+                .into(),
+            base_branch: opts
+                .get_one::<String>("branch")
+                .map(String::as_str)
+                .unwrap_or(DEFAULT_BRANCH)
+                .into(),
             ignored_branches: ignored,
-            squashes: opts.is_present("squashes"),
-            delete_unpushed_branches: opts.is_present("delete-unpushed-branches"),
+            squashes: opts.get_flag("squashes"),
+            delete_unpushed_branches: opts.get_flag("delete-unpushed-branches"),
             delete_mode: DeleteMode::new(opts),
         }
     }
@@ -103,7 +110,7 @@ impl Options {
 mod test {
     use super::{DeleteMode, Options};
     use clap;
-    use cli;
+    use crate::cli;
 
     // Helpers
     fn parse_args(args: Vec<&str>) -> clap::ArgMatches {

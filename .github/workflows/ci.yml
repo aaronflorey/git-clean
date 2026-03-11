@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Rust ${{ matrix.rust }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.allow_failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust: stable
+            allow_failure: false
+          - rust: beta
+            allow_failure: false
+          - rust: nightly
+            allow_failure: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Configure Git Identity for Tests
+        run: |
+          git config --global user.email "user@example.com"
+          git config --global user.name "Example User"
+
+      - name: Run Tests
+        run: cargo test --locked

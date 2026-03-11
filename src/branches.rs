@@ -1,6 +1,6 @@
-use commands::*;
-use error::Error;
-use options::*;
+use crate::commands::*;
+use crate::error::Error;
+use crate::options::*;
 use regex::Regex;
 use std::io::{stdin, stdout, Write};
 

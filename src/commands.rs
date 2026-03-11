@@ -2,9 +2,9 @@ use std::collections::BTreeSet;
 use std::io::Error as IOError;
 use std::process::{Command, ExitStatus, Output, Stdio};
 
-use branches::Branches;
-use error::Error;
-use options::Options;
+use crate::branches::Branches;
+use crate::error::Error;
+use crate::options::Options;
 
 pub fn run_command_with_no_output(args: &[&str]) {
     Command::new(args[0])

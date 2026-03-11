@@ -1,4 +1,4 @@
-use support::project;
+use crate::support::project;
 
 macro_rules! touch_command {
     ($project:ident, $file_name:literal) => {

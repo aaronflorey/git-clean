@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::{env, str};
-use tempdir::TempDir;
+use tempfile::Builder;
+use tempfile::TempDir;
 
 macro_rules! touch_command {
     ($project:ident, $file_name:literal) => {
@@ -31,12 +32,14 @@ impl ProjectBuilder {
     }
 
     pub fn build(self) -> Project {
-        let work_dir = TempDir::new(&self.name).unwrap();
-        let remote_dir = TempDir::new(&format!("{}_remote", &self.name)).unwrap();
+        let work_dir = Builder::new().prefix(&self.name).tempdir().unwrap();
+        let remote_dir = Builder::new()
+            .prefix(&format!("{}_remote", &self.name))
+            .tempdir()
+            .unwrap();
 
         let project = Project {
             directory: work_dir,
-            name: self.name,
             remote: remote_dir,
         };
 
@@ -58,7 +61,6 @@ impl ProjectBuilder {
 
 pub struct Project {
     directory: TempDir,
-    pub name: String,
     remote: TempDir,
 }
 

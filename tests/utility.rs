@@ -1,4 +1,4 @@
-use support::project;
+use crate::support::project;
 
 #[test]
 fn test_git_clean_checks_for_git_in_path() {

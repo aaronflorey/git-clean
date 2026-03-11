@@ -1,24 +1,20 @@
 #![deny(warnings)]
 
-extern crate clap;
-
-extern crate regex;
-
 pub mod cli;
 
 use clap::ArgMatches;
 
 mod branches;
-use branches::Branches;
+use crate::branches::Branches;
 
 mod commands;
 pub use commands::validate_git_installation;
 
 mod error;
-use error::Error;
+use crate::error::Error;
 
 mod options;
-use options::Options;
+use crate::options::Options;
 
 pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
     validate_git_installation()?;
@@ -33,7 +29,7 @@ pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
         return Ok(());
     }
 
-    if !matches.is_present("yes") {
+    if !matches.get_flag("yes") {
         branches.print_warning_and_prompt(&options.delete_mode)?;
     }
 

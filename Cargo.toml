@@ -8,13 +8,15 @@ documentation = "https://github.com/mcasper/git-clean"
 homepage = "https://github.com/mcasper/git-clean"
 repository = "https://github.com/mcasper/git-clean"
 autotests = false
+edition = "2021"
+rust-version = "1.74"
 
 [dependencies]
-clap = "2.33.1"
-regex = "1.6"
+clap = "4.5"
+regex = "1.12"
 
 [dev-dependencies]
-tempdir = "0.3"
+tempfile = "3.17"
 
 [[test]]
 name = "tests"

@@ -1,7 +1,5 @@
 #![deny(warnings)]
 
-extern crate git_clean;
-
 use git_clean::*;
 
 fn main() {

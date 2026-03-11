@@ -1,4 +1,4 @@
-use support::project;
+use crate::support::project;
 
 #[test]
 fn test_git_clean_removes_remote_branches() {

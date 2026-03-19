@@ -38,15 +38,28 @@ impl Branches {
         }
     }
 
-    pub fn merged(options: &Options) -> Branches {
+    pub fn merged(options: &Options) -> Result<Branches, Error> {
         let mut branches: Vec<String> = vec![];
         println!("Updating remote {}", options.remote);
-        run_command_with_no_output(&["git", "remote", "update", &options.remote, "--prune"]);
+        run_command_with_no_output(&["git", "remote", "update", &options.remote, "--prune"])?;
 
-        let merged_branches_regex = format!("^\\*?\\s*{}$", options.base_branch);
-        let merged_branches_filter = Regex::new(&merged_branches_regex).unwrap();
-        let merged_branches_cmd = run_command(&["git", "branch", "--merged"]);
-        let merged_branches_output = std::str::from_utf8(&merged_branches_cmd.stdout).unwrap();
+        let escaped_base_branch = regex::escape(&options.base_branch);
+
+        let merged_branches_regex = format!("^\\*?\\s*{}$", &escaped_base_branch);
+        let merged_branches_filter =
+            Regex::new(&merged_branches_regex).map_err(|source| Error::InvalidPattern {
+                field: "base branch",
+                value: options.base_branch.clone(),
+                source,
+            })?;
+        let merged_branches_cmd = run_command(&["git", "branch", "--merged"])?;
+        let merged_branches_output =
+            String::from_utf8(merged_branches_cmd.stdout).map_err(|source| {
+                Error::CommandOutputEncoding {
+                    command: "git branch --merged".to_owned(),
+                    source,
+                }
+            })?;
 
         let merged_branches =
             merged_branches_output
@@ -58,10 +71,21 @@ impl Branches {
                     acc
                 });
 
-        let local_branches_regex = format!("^\\*?\\s*{}$", options.base_branch);
-        let local_branches_filter = Regex::new(&local_branches_regex).unwrap();
-        let local_branches_cmd = run_command(&["git", "branch"]);
-        let local_branches_output = std::str::from_utf8(&local_branches_cmd.stdout).unwrap();
+        let local_branches_regex = format!("^\\*?\\s*{}$", &escaped_base_branch);
+        let local_branches_filter =
+            Regex::new(&local_branches_regex).map_err(|source| Error::InvalidPattern {
+                field: "base branch",
+                value: options.base_branch.clone(),
+                source,
+            })?;
+        let local_branches_cmd = run_command(&["git", "branch"])?;
+        let local_branches_output =
+            String::from_utf8(local_branches_cmd.stdout).map_err(|source| {
+                Error::CommandOutputEncoding {
+                    command: "git branch".to_owned(),
+                    source,
+                }
+            })?;
 
         let local_branches = local_branches_output
             .lines()
@@ -76,10 +100,21 @@ impl Branches {
             .cloned()
             .collect::<Vec<String>>();
 
-        let remote_branches_regex = format!("\\b(HEAD|{})\\b", &options.base_branch);
-        let remote_branches_filter = Regex::new(&remote_branches_regex).unwrap();
-        let remote_branches_cmd = run_command(&["git", "branch", "-r"]);
-        let remote_branches_output = std::str::from_utf8(&remote_branches_cmd.stdout).unwrap();
+        let remote_branches_regex = format!("\\b(HEAD|{})\\b", &escaped_base_branch);
+        let remote_branches_filter =
+            Regex::new(&remote_branches_regex).map_err(|source| Error::InvalidPattern {
+                field: "base branch",
+                value: options.base_branch.clone(),
+                source,
+            })?;
+        let remote_branches_cmd = run_command(&["git", "branch", "-r"])?;
+        let remote_branches_output =
+            String::from_utf8(remote_branches_cmd.stdout).map_err(|source| {
+                Error::CommandOutputEncoding {
+                    command: "git branch -r".to_owned(),
+                    source,
+                }
+            })?;
 
         let remote_branches =
             remote_branches_output
@@ -105,7 +140,7 @@ impl Branches {
 
             // If it does exist in the remote, check to see if it's listed in git branches --merged. If
             // it is, that means it wasn't merged using Github squashes, and we can suggest it.
-            if merged_branches.iter().any(|b: &String| *b == branch) {
+            if merged_branches.contains(&branch) {
                 branches.push(branch.to_owned());
                 continue;
             }
@@ -114,7 +149,7 @@ impl Branches {
             // If it can't cleanly merge, then it has likely been merged with Github squashes, and we
             // can suggest it.
             if options.squashes {
-                run_command(&["git", "checkout", &branch]);
+                run_command(&["git", "checkout", &branch])?;
                 match run_command_with_status(&[
                     "git",
                     "pull",
@@ -137,8 +172,8 @@ impl Branches {
                     }
                 }
 
-                run_command(&["git", "reset", "--hard"]);
-                run_command(&["git", "checkout", &options.base_branch]);
+                run_command(&["git", "reset", "--hard"])?;
+                run_command(&["git", "checkout", &options.base_branch])?;
             }
         }
 
@@ -147,7 +182,7 @@ impl Branches {
         // g branch -d -r <remote>/<branch>
         // g branch -d <branch>
 
-        Branches::new(branches)
+        Ok(Branches::new(branches))
     }
 
     fn format_columns(&self) -> String {
@@ -190,20 +225,20 @@ impl Branches {
         rows.join("\n").trim().to_owned()
     }
 
-    pub fn delete(&self, options: &Options) -> String {
+    pub fn delete(&self, options: &Options) -> Result<String, Error> {
         match options.delete_mode {
             DeleteMode::Local => delete_local_branches(self),
             DeleteMode::Remote => delete_remote_branches(self, options),
             DeleteMode::Both => {
-                let local_output = delete_local_branches(self);
-                let remote_output = delete_remote_branches(self, options);
-                [
+                let local_output = delete_local_branches(self)?;
+                let remote_output = delete_remote_branches(self, options)?;
+                Ok([
                     "Remote:".to_owned(),
                     remote_output,
                     "\nLocal:".to_owned(),
                     local_output,
                 ]
-                .join("\n")
+                .join("\n"))
             }
         }
     }

@@ -31,7 +31,7 @@ pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
     Options::save_cli_flags(matches, &current_directory)?;
     options.validate()?;
 
-    let branches = Branches::merged(&options);
+    let branches = Branches::merged(&options)?;
 
     if branches.string.is_empty() {
         println!("No branches to delete, you're clean!");
@@ -42,7 +42,7 @@ pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
         branches.print_warning_and_prompt(&options.delete_mode)?;
     }
 
-    let msg = branches.delete(&options);
+    let msg = branches.delete(&options)?;
     println!("\n{}", msg);
 
     Ok(())

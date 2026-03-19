@@ -127,3 +127,25 @@ fn test_git_clean_does_not_remove_list_of_ignored_local_branches() {
         result.failure_message("command to delete test3")
     );
 }
+
+#[test]
+fn test_git_clean_handles_base_branch_regex_metacharacters() {
+    let project = project("git-clean_base_branch_regex_metacharacters").build();
+
+    project.setup_command("git branch -m main(test)");
+
+    let result = project.git_clean_command("-y -b main(test)").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed")
+    );
+    assert!(
+        result
+            .stdout()
+            .contains("No branches to delete, you're clean!"),
+        "{}",
+        result.failure_message("no branches to delete")
+    );
+}

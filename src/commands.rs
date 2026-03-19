@@ -6,23 +6,39 @@ use crate::branches::Branches;
 use crate::error::Error;
 use crate::options::Options;
 
-pub fn run_command_with_no_output(args: &[&str]) {
+fn command_to_string(args: &[&str]) -> String {
+    args.join(" ")
+}
+
+pub fn run_command_with_no_output(args: &[&str]) -> Result<(), Error> {
     Command::new(args[0])
         .args(&args[1..])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .output()
-        .unwrap_or_else(|e| panic!("Error with command: {}", e));
+        .map_err(|source| Error::CommandExecution {
+            command: command_to_string(args),
+            source,
+        })?;
+    Ok(())
 }
 
-pub fn output(args: &[&str]) -> String {
-    let result = run_command(args);
-    String::from_utf8(result.stdout).unwrap().trim().to_owned()
+pub fn output(args: &[&str]) -> Result<String, Error> {
+    let result = run_command(args)?;
+    String::from_utf8(result.stdout)
+        .map(|stdout| stdout.trim().to_owned())
+        .map_err(|source| Error::CommandOutputEncoding {
+            command: command_to_string(args),
+            source,
+        })
 }
 
-pub fn run_command(args: &[&str]) -> Output {
-    run_command_with_result(args).unwrap_or_else(|e| panic!("Error with command: {}", e))
+pub fn run_command(args: &[&str]) -> Result<Output, Error> {
+    run_command_with_result(args).map_err(|source| Error::CommandExecution {
+        command: command_to_string(args),
+        source,
+    })
 }
 
 pub fn run_command_with_result(args: &[&str]) -> Result<Output, IOError> {
@@ -45,14 +61,14 @@ pub fn validate_git_installation() -> Result<(), Error> {
     }
 }
 
-pub fn delete_local_branches(branches: &Branches) -> String {
+pub fn delete_local_branches(branches: &Branches) -> Result<String, Error> {
     // https://git-scm.com/docs/git-branch
     // With a -d or -D option, <branchname> will be deleted. You may specify more than one branch
     // for deletion.
     //
     // So we can work without xargs.
     if branches.vec.is_empty() {
-        String::default()
+        Ok(String::default())
     } else {
         let delete_branches_args =
             branches
@@ -62,15 +78,25 @@ pub fn delete_local_branches(branches: &Branches) -> String {
                     acc.push(b);
                     acc
                 });
-        let delete_branches_cmd = run_command(&delete_branches_args);
-        String::from_utf8(delete_branches_cmd.stdout).unwrap()
+        let delete_branches_cmd = run_command(&delete_branches_args)?;
+        String::from_utf8(delete_branches_cmd.stdout).map_err(|source| {
+            Error::CommandOutputEncoding {
+                command: command_to_string(&delete_branches_args),
+                source,
+            }
+        })
     }
 }
 
-pub fn delete_remote_branches(branches: &Branches, options: &Options) -> String {
-    let remote_branches_cmd = run_command(&["git", "branch", "-r"]);
+pub fn delete_remote_branches(branches: &Branches, options: &Options) -> Result<String, Error> {
+    let remote_branches_cmd = run_command(&["git", "branch", "-r"])?;
 
-    let s = String::from_utf8(remote_branches_cmd.stdout).unwrap();
+    let s = String::from_utf8(remote_branches_cmd.stdout).map_err(|source| {
+        Error::CommandOutputEncoding {
+            command: "git branch -r".to_owned(),
+            source,
+        }
+    })?;
     let all_remote_branches = s.split('\n').collect::<Vec<&str>>();
     let origin_for_trim = &format!("{}/", &options.remote)[..];
     let b_tree_remotes = all_remote_branches
@@ -99,8 +125,13 @@ pub fn delete_remote_branches(branches: &Branches, options: &Options) -> String 
                 acc
             },
         );
-        let delete_remote_branches_cmd = run_command(&delete_branches_args);
-        String::from_utf8(delete_remote_branches_cmd.stderr).unwrap()
+        let delete_remote_branches_cmd = run_command(&delete_branches_args)?;
+        String::from_utf8(delete_remote_branches_cmd.stderr).map_err(|source| {
+            Error::CommandOutputEncoding {
+                command: command_to_string(&delete_branches_args),
+                source,
+            }
+        })?
     };
 
     // Everything is written to stderr, so we need to process that
@@ -119,13 +150,16 @@ pub fn delete_remote_branches(branches: &Branches, options: &Options) -> String 
         }
     }
 
-    output.join("\n")
+    Ok(output.join("\n"))
 }
 
 #[cfg(test)]
 mod test {
 
+    use crate::error::Error;
     use regex::Regex;
+
+    use super::{run_command, run_command_with_no_output};
 
     // `spawn_piped` was removed so this test is somewhat outdated.
     // It now tests the match operation for which `grep` was used before.
@@ -140,5 +174,31 @@ mod test {
                 }),
             "foo\n"
         );
+    }
+
+    #[test]
+    fn test_run_command_returns_typed_error_with_command_context() {
+        let err = run_command(&["git-clean-command-that-does-not-exist", "--version"]).unwrap_err();
+
+        match err {
+            Error::CommandExecution { command, .. } => {
+                assert_eq!(command, "git-clean-command-that-does-not-exist --version")
+            }
+            other => panic!("Expected CommandExecution, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_run_command_with_no_output_returns_typed_error_with_command_context() {
+        let err =
+            run_command_with_no_output(&["git-clean-command-that-does-not-exist", "--version"])
+                .unwrap_err();
+
+        match err {
+            Error::CommandExecution { command, .. } => {
+                assert_eq!(command, "git-clean-command-that-does-not-exist --version")
+            }
+            other => panic!("Expected CommandExecution, found {:?}", other),
+        }
     }
 }

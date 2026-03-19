@@ -3,7 +3,6 @@ use crate::config::{self, RepoConfig};
 use crate::error::Error;
 use clap::parser::ValueSource;
 use clap::ArgMatches;
-use regex::Regex;
 use std::path::Path;
 
 const DEFAULT_REMOTE: &str = "origin";
@@ -189,7 +188,7 @@ impl Options {
     }
 
     fn validate_base_branch(&self) -> Result<(), Error> {
-        let current_branch = output(&["git", "rev-parse", "--abbrev-ref", "HEAD"]);
+        let current_branch = output(&["git", "rev-parse", "--abbrev-ref", "HEAD"])?;
 
         if current_branch != self.base_branch {
             return Err(Error::CurrentBranchInvalid);
@@ -199,19 +198,17 @@ impl Options {
     }
 
     fn validate_remote(&self) -> Result<(), Error> {
-        let remote_rx = Regex::new(&self.remote).unwrap();
-        let remotes = run_command(&["git", "remote"]);
-        let remotes_output = std::str::from_utf8(&remotes.stdout).unwrap();
+        let remotes = run_command(&["git", "remote"])?;
+        let remotes_output =
+            String::from_utf8(remotes.stdout).map_err(|source| Error::CommandOutputEncoding {
+                command: "git remote".to_owned(),
+                source,
+            })?;
 
-        let remote_result =
-            remote_rx
-                .captures_iter(remotes_output)
-                .fold(String::new(), |mut acc, e| {
-                    acc.push_str(&e[0]);
-                    acc
-                });
-
-        if remote_result.is_empty() {
+        if !remotes_output
+            .lines()
+            .any(|remote| remote.trim() == self.remote)
+        {
             return Err(Error::InvalidRemote);
         }
 
@@ -223,7 +220,6 @@ impl Options {
 mod test {
     use super::{DeleteMode, Options};
     use crate::cli;
-    use clap;
 
     // Helpers
     fn parse_args(args: Vec<&str>) -> clap::ArgMatches {
@@ -237,21 +233,21 @@ mod test {
 
         match DeleteMode::new(&matches) {
             DeleteMode::Local => (),
-            other @ _ => panic!("Expected a DeleteMode::Local, but found: {:?}", other),
+            other => panic!("Expected a DeleteMode::Local, but found: {:?}", other),
         };
 
         let matches = parse_args(vec!["git-clean", "-r"]);
 
         match DeleteMode::new(&matches) {
             DeleteMode::Remote => (),
-            other @ _ => panic!("Expected a DeleteMode::Remote, but found: {:?}", other),
+            other => panic!("Expected a DeleteMode::Remote, but found: {:?}", other),
         };
 
         let matches = parse_args(vec!["git-clean"]);
 
         match DeleteMode::new(&matches) {
             DeleteMode::Both => (),
-            other @ _ => panic!("Expected a DeleteMode::Both, but found: {:?}", other),
+            other => panic!("Expected a DeleteMode::Both, but found: {:?}", other),
         };
     }
 

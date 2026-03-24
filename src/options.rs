@@ -17,6 +17,33 @@ pub enum DeleteMode {
 
 pub use self::DeleteMode::*;
 
+#[derive(Debug, Clone, Copy)]
+pub enum ColorMode {
+    Auto,
+    Always,
+    Never,
+}
+
+pub use self::ColorMode::*;
+
+impl ColorMode {
+    fn from_cli(value: &str) -> ColorMode {
+        match value {
+            "always" => Always,
+            "never" => Never,
+            _ => Auto,
+        }
+    }
+
+    pub fn describe(&self) -> &'static str {
+        match self {
+            Auto => "auto",
+            Always => "always",
+            Never => "never",
+        }
+    }
+}
+
 impl DeleteMode {
     pub fn new(opts: &ArgMatches) -> DeleteMode {
         if opts.get_flag("locals") {
@@ -36,6 +63,14 @@ impl DeleteMode {
         };
         format!("The following branches will be deleted {}", source)
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Local => "local",
+            Remote => "remote",
+            Both => "local + remote",
+        }
+    }
 }
 
 pub struct Options {
@@ -45,6 +80,7 @@ pub struct Options {
     pub delete_unpushed_branches: bool,
     pub ignored_branches: Vec<String>,
     pub delete_mode: DeleteMode,
+    pub color_mode: ColorMode,
 }
 
 pub struct ResolvedOptions {
@@ -100,6 +136,7 @@ impl Options {
             squashes: false,
             delete_unpushed_branches: false,
             delete_mode: Both,
+            color_mode: Auto,
         }
     }
 
@@ -128,6 +165,10 @@ impl Options {
             || opts.value_source("remotes") == Some(ValueSource::CommandLine)
         {
             self.delete_mode = DeleteMode::new(opts);
+        }
+
+        if let Some(color) = opts.get_one::<String>("color") {
+            self.color_mode = ColorMode::from_cli(color);
         }
     }
 
@@ -160,25 +201,11 @@ impl Options {
             patch.delete_mode = Some(config::delete_mode_to_config(&DeleteMode::new(opts)));
         }
 
+        if let Some(color) = opts.get_one::<String>("color") {
+            patch.color_mode = Some(config::color_mode_to_config(&ColorMode::from_cli(color)));
+        }
+
         patch
-    }
-
-    pub fn describe_effective(&self) -> String {
-        let delete_mode = match self.delete_mode {
-            Local => "local",
-            Remote => "remote",
-            Both => "both",
-        };
-
-        format!(
-            "remote={}\nbase_branch={}\nsquashes={}\ndelete_unpushed_branches={}\nignored_branches={:?}\ndelete_mode={}",
-            self.remote,
-            self.base_branch,
-            self.squashes,
-            self.delete_unpushed_branches,
-            self.ignored_branches,
-            delete_mode
-        )
     }
 
     pub fn validate(&self) -> Result<(), Error> {
@@ -218,7 +245,7 @@ impl Options {
 
 #[cfg(test)]
 mod test {
-    use super::{DeleteMode, Options};
+    use super::{ColorMode, DeleteMode, Options};
     use crate::cli;
 
     // Helpers
@@ -265,6 +292,28 @@ mod test {
             "The following branches will be deleted locally and remotely:",
             DeleteMode::Both.warning_message()
         );
+    }
+
+    #[test]
+    fn test_color_mode_defaults_to_auto() {
+        let matches = parse_args(vec!["git-clean"]);
+        let options = Options::new(&matches);
+
+        match options.color_mode {
+            ColorMode::Auto => (),
+            other => panic!("Expected ColorMode::Auto, but found: {:?}", other),
+        };
+    }
+
+    #[test]
+    fn test_color_mode_override_from_cli() {
+        let matches = parse_args(vec!["git-clean", "--color", "never"]);
+        let options = Options::new(&matches);
+
+        match options.color_mode {
+            ColorMode::Never => (),
+            other => panic!("Expected ColorMode::Never, but found: {:?}", other),
+        };
     }
 
     // Options tests

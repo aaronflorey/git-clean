@@ -77,4 +77,11 @@ pub fn build_cli() -> Command {
                 .help("Ignore per-repository config values for this run")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("color")
+                .long("color")
+                .help("Control color output (auto, always, never)")
+                .value_parser(["auto", "always", "never"])
+                .num_args(1),
+        )
 }

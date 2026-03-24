@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::options::{DeleteMode, Options};
+use crate::options::{ColorMode, DeleteMode, Options};
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -17,6 +17,7 @@ pub struct RepoConfig {
     pub delete_unpushed_branches: Option<bool>,
     pub ignored_branches: Option<Vec<String>>,
     pub delete_mode: Option<DeleteModeConfig>,
+    pub color_mode: Option<ColorModeConfig>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -25,6 +26,32 @@ pub enum DeleteModeConfig {
     Local,
     Remote,
     Both,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorModeConfig {
+    Auto,
+    Always,
+    Never,
+}
+
+impl ColorModeConfig {
+    fn from_color_mode(mode: &ColorMode) -> Self {
+        match mode {
+            ColorMode::Auto => ColorModeConfig::Auto,
+            ColorMode::Always => ColorModeConfig::Always,
+            ColorMode::Never => ColorModeConfig::Never,
+        }
+    }
+
+    fn to_color_mode(self) -> ColorMode {
+        match self {
+            ColorModeConfig::Auto => ColorMode::Auto,
+            ColorModeConfig::Always => ColorMode::Always,
+            ColorModeConfig::Never => ColorMode::Never,
+        }
+    }
 }
 
 impl DeleteModeConfig {
@@ -53,6 +80,7 @@ impl RepoConfig {
             && self.delete_unpushed_branches.is_none()
             && self.ignored_branches.is_none()
             && self.delete_mode.is_none()
+            && self.color_mode.is_none()
     }
 
     pub fn apply_to_options(&self, options: &mut Options) {
@@ -73,6 +101,9 @@ impl RepoConfig {
         }
         if let Some(delete_mode) = self.delete_mode {
             options.delete_mode = delete_mode.to_delete_mode();
+        }
+        if let Some(color_mode) = self.color_mode {
+            options.color_mode = color_mode.to_color_mode();
         }
     }
 
@@ -95,6 +126,9 @@ impl RepoConfig {
         if let Some(delete_mode) = patch.delete_mode {
             self.delete_mode = Some(delete_mode);
         }
+        if let Some(color_mode) = patch.color_mode {
+            self.color_mode = Some(color_mode);
+        }
     }
 }
 
@@ -106,6 +140,10 @@ struct ConfigFile {
 
 pub fn delete_mode_to_config(mode: &DeleteMode) -> DeleteModeConfig {
     DeleteModeConfig::from_delete_mode(mode)
+}
+
+pub fn color_mode_to_config(mode: &ColorMode) -> ColorModeConfig {
+    ColorModeConfig::from_color_mode(mode)
 }
 
 pub fn load_repo_config(repo_path: &Path) -> Result<Option<RepoConfig>, Error> {

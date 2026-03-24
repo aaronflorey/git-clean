@@ -66,6 +66,7 @@ git-clean -r -y
 -R, --remote <remote>           Remote name (default: origin)
 -b, --branch <branch>           Base branch (default: main)
 -i, --ignore <branch>           Ignore branch (repeatable)
+    --color <auto|always|never> Control color output (default: auto)
     --save-config               Save provided flags for this repository
     --ignore-config             Ignore saved repository config
 ```
@@ -94,6 +95,7 @@ remote = "origin"
 base_branch = "main"
 ignored_branches = ["release", "keep-me"]
 delete_mode = "both"
+color_mode = "auto"
 ```
 
 ## Development

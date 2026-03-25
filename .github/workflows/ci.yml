@@ -29,6 +29,11 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-${{ runner.os }}
+
       - name: Configure Git Identity for Tests
         run: |
           git config --global user.email "user@example.com"

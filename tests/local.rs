@@ -149,3 +149,46 @@ fn test_git_clean_handles_base_branch_regex_metacharacters() {
         result.failure_message("no branches to delete")
     );
 }
+
+#[test]
+fn test_git_clean_dry_run_does_not_remove_local_branches() {
+    let project = project("git-clean_dry_run_local").build();
+
+    project.setup_command("git branch test1");
+    project.setup_command("git branch test2");
+
+    let result = project.git_clean_command("--dry-run -y").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed")
+    );
+    assert!(
+        result
+            .stdout()
+            .contains("Dry run enabled: no branches were deleted."),
+        "{}",
+        result.failure_message("dry run notice")
+    );
+    assert!(
+        result
+            .stdout()
+            .contains("Would delete locally: test1, test2"),
+        "{}",
+        result.failure_message("dry run output to list local branches")
+    );
+
+    let verify = project.setup_command("git branch");
+
+    assert!(
+        verify.stdout().contains("test1"),
+        "{}",
+        verify.failure_message("test1 to remain after dry run")
+    );
+    assert!(
+        verify.stdout().contains("test2"),
+        "{}",
+        verify.failure_message("test2 to remain after dry run")
+    );
+}

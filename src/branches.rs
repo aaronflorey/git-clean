@@ -274,6 +274,10 @@ impl Branches {
     }
 
     pub fn delete(&self, options: &Options) -> Result<String, Error> {
+        if options.dry_run {
+            return self.dry_run_message(options);
+        }
+
         match options.delete_mode {
             DeleteMode::Local => delete_local_branches(self),
             DeleteMode::Remote => delete_remote_branches(self, options),
@@ -289,6 +293,34 @@ impl Branches {
                 .join("\n"))
             }
         }
+    }
+
+    fn dry_run_message(&self, options: &Options) -> Result<String, Error> {
+        let grouped = self.grouped_preview(options)?;
+        let mut rows = vec!["Dry run enabled: no branches were deleted.".to_owned()];
+
+        if !grouped.both.is_empty() {
+            rows.push(format!(
+                "Would delete locally and remotely: {}",
+                grouped.both.join(", ")
+            ));
+        }
+
+        if !grouped.local_only.is_empty() {
+            rows.push(format!(
+                "Would delete locally: {}",
+                grouped.local_only.join(", ")
+            ));
+        }
+
+        if !grouped.remote_only.is_empty() {
+            rows.push(format!(
+                "Would delete remotely: {}",
+                grouped.remote_only.join(", ")
+            ));
+        }
+
+        Ok(rows.join("\n"))
     }
 }
 

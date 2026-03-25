@@ -32,6 +32,7 @@ pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
         println!("{}", ui.section("Effective settings"));
         println!("{}", ui.key_value("remote", &options.remote));
         println!("{}", ui.key_value("base branch", &options.base_branch));
+        println!("{}", ui.key_value("dry run", &options.dry_run.to_string()));
         println!(
             "{}",
             ui.key_value("delete mode", options.delete_mode.as_str())
@@ -68,18 +69,24 @@ pub fn run(matches: &ArgMatches) -> Result<(), error::Error> {
     }
 
     println!("{}", ui.section("Delete plan"));
+    println!("{}", ui.key_value("dry run", &options.dry_run.to_string()));
     println!("{}", ui.key_value("mode", options.delete_mode.as_str()));
     println!(
         "{}",
         ui.key_value("branches matched", &target_count.to_string())
     );
 
-    if !matches.get_flag("yes") {
+    if !options.dry_run && !matches.get_flag("yes") {
         branches.print_warning_and_prompt(&options, &ui)?;
     }
 
     let msg = branches.delete(&options)?;
-    println!("{}", ui.section("Delete result"));
+    let result_label = if options.dry_run {
+        "Dry run result"
+    } else {
+        "Delete result"
+    };
+    println!("{}", ui.section(result_label));
     println!("{}", msg);
 
     Ok(())

@@ -61,6 +61,7 @@ git-clean -r -y
 -l, --locals                    Only delete local branches
 -r, --remotes                   Only delete remote branches
 -y, --yes                       Skip confirmation prompt
+    --dry-run                   Preview branches without deleting them
 -s, --squashes                  Detect squash-merged branches
 -d, --delete-unpushed-branches  Treat local-only branches as deletable
 -R, --remote <remote>           Remote name (default: origin)

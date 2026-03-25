@@ -76,6 +76,7 @@ impl DeleteMode {
 pub struct Options {
     pub remote: String,
     pub base_branch: String,
+    pub dry_run: bool,
     pub squashes: bool,
     pub delete_unpushed_branches: bool,
     pub ignored_branches: Vec<String>,
@@ -132,6 +133,7 @@ impl Options {
         Options {
             remote: DEFAULT_REMOTE.to_owned(),
             base_branch: DEFAULT_BRANCH.to_owned(),
+            dry_run: false,
             ignored_branches: Vec::new(),
             squashes: false,
             delete_unpushed_branches: false,
@@ -151,6 +153,10 @@ impl Options {
 
         if let Some(ignored) = opts.get_many::<String>("ignore") {
             self.ignored_branches = ignored.cloned().collect();
+        }
+
+        if opts.get_flag("dry-run") {
+            self.dry_run = true;
         }
 
         if opts.get_flag("squashes") {
@@ -324,6 +330,7 @@ mod test {
 
         assert_eq!("main".to_owned(), git_options.base_branch);
         assert_eq!("origin".to_owned(), git_options.remote);
+        assert!(!git_options.dry_run);
 
         let matches = parse_args(vec!["git-clean", "-b", "stable"]);
         let git_options = Options::new(&matches);
@@ -343,11 +350,13 @@ mod test {
             "git-clean",
             "-R",
             "upstream",
+            "--dry-run",
             "--squashes",
             "--delete-unpushed-branches",
         ]);
         let git_options = Options::new(&matches);
 
+        assert!(git_options.dry_run);
         assert!(git_options.squashes);
         assert!(git_options.delete_unpushed_branches);
 

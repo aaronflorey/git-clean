@@ -30,6 +30,12 @@ pub fn build_cli() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("dry-run")
+                .long("dry-run")
+                .help("Preview which branches would be deleted without deleting them")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("squashes")
                 .short('s')
                 .long("squashes")

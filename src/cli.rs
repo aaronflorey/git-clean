@@ -46,7 +46,7 @@ pub fn build_cli() -> Command {
             Arg::new("delete-unpushed-branches")
                 .short('d')
                 .long("delete-unpushed-branches")
-                .help("Delete any local branch that is not present on the remote. Use this to speed up the checks if such branches should always be considered as merged")
+                .help("Delete local branches with no upstream that are not present on the remote")
                 .action(ArgAction::SetTrue),
         )
         .arg(

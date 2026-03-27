@@ -3,7 +3,7 @@ use crate::error::Error;
 use crate::options::*;
 use crate::ui::Ui;
 use regex::Regex;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::io::{stdin, stdout, Write};
 
 const PREVIEW_BRANCH_LIMIT: usize = 20;
@@ -174,10 +174,21 @@ impl Branches {
                     acc
                 });
 
+        let tracking = local_branch_tracking()?;
+
         for branch in local_branches {
+            let tracking_info = tracking.get(&branch).cloned().unwrap_or_default();
+
+            // Branch tracks a remote ref that no longer exists.
+            if tracking_info.upstream_gone {
+                branches.push(branch.to_owned());
+                continue;
+            }
+
             // First check if the local branch doesn't exist in the remote, it's the cheapest and easiest
             // way to determine if we want to suggest to delete it.
             if options.delete_unpushed_branches
+                && !tracking_info.has_upstream
                 && !remote_branches
                     .iter()
                     .any(|b: &String| *b == format!("{}/{}", &options.remote, branch))
@@ -361,6 +372,49 @@ fn remote_branch_names(options: &Options) -> Result<BTreeSet<String>, Error> {
         .lines()
         .map(str::trim)
         .map(|line| line.trim_start_matches(&remote_prefix).to_owned())
+        .collect())
+}
+
+#[derive(Clone, Copy, Default)]
+struct BranchTracking {
+    has_upstream: bool,
+    upstream_gone: bool,
+}
+
+fn local_branch_tracking() -> Result<HashMap<String, BranchTracking>, Error> {
+    let cmd = run_command(&[
+        "git",
+        "for-each-ref",
+        "--format=%(refname:short)\t%(upstream:short)\t%(upstream:track)",
+        "refs/heads",
+    ])?;
+    let output = String::from_utf8(cmd.stdout).map_err(|source| Error::CommandOutputEncoding {
+        command: "git for-each-ref".to_owned(),
+        source,
+    })?;
+
+    Ok(output
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, '\t');
+            let branch = fields.next()?.trim();
+            if branch.is_empty() {
+                return None;
+            }
+
+            let upstream = fields.next().unwrap_or_default().trim();
+            let track = fields.next().unwrap_or_default().trim();
+            let has_upstream = !upstream.is_empty();
+            let upstream_gone = has_upstream && track.contains("gone");
+
+            Some((
+                branch.to_owned(),
+                BranchTracking {
+                    has_upstream,
+                    upstream_gone,
+                },
+            ))
+        })
         .collect())
 }
 

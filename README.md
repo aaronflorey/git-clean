@@ -63,7 +63,7 @@ git-clean -r -y
 -y, --yes                       Skip confirmation prompt
     --dry-run                   Preview branches without deleting them
 -s, --squashes                  Detect squash-merged branches
--d, --delete-unpushed-branches  Treat local-only branches as deletable
+-d, --delete-unpushed-branches  Delete branches with no upstream that are absent on remote
 -R, --remote <remote>           Remote name (default: origin)
 -b, --branch <branch>           Base branch (default: main)
 -i, --ignore <branch>           Ignore branch (repeatable)

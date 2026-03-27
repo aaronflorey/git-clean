@@ -156,6 +156,36 @@ fn test_git_clean_deletes_unpushed_ahead_branch() {
 }
 
 #[test]
+fn test_git_clean_deletes_gone_upstream_branch_without_d_flag() {
+    let project = project("git-clean_gone_upstream").build().setup_remote();
+
+    let touch_command = touch_command!(project, "file2.txt");
+
+    project.batch_setup_commands(&[
+        "git checkout -b gone_upstream",
+        &touch_command,
+        "git add .",
+        "git commit -am GoneUpstream",
+        "git push -u origin gone_upstream",
+        "git push origin --delete gone_upstream",
+        "git checkout main",
+    ]);
+
+    let result = project.git_clean_command("-y").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed")
+    );
+    assert!(
+        result.stdout().contains("Deleted branch gone_upstream"),
+        "{}",
+        result.failure_message("command to delete gone_upstream")
+    );
+}
+
+#[test]
 fn test_git_clean_works_with_squashes_with_flag() {
     let project = project("git-clean_github_squashes").build().setup_remote();
 

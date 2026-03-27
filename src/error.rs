@@ -16,6 +16,11 @@ pub enum Error {
         command: String,
         source: IoError,
     },
+    CommandFailed {
+        command: String,
+        code: Option<i32>,
+        stderr: String,
+    },
     CommandOutputEncoding {
         command: String,
         source: FromUtf8Error,
@@ -52,6 +57,22 @@ impl Display for Error {
                 ref command,
                 ref source,
             } => write!(f, "Failed to execute command `{}`: {}", command, source),
+            CommandFailed {
+                ref command,
+                ref code,
+                ref stderr,
+            } => {
+                let trimmed = stderr.trim();
+                if trimmed.is_empty() {
+                    write!(f, "Command `{}` failed with exit code {:?}.", command, code)
+                } else {
+                    write!(
+                        f,
+                        "Command `{}` failed with exit code {:?}: {}",
+                        command, code, trimmed
+                    )
+                }
+            }
             CommandOutputEncoding { ref command, .. } => {
                 write!(f, "Command `{}` produced non-UTF-8 output.", command)
             }

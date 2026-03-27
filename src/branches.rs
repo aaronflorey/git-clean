@@ -3,7 +3,7 @@ use crate::error::Error;
 use crate::options::*;
 use crate::ui::Ui;
 use regex::Regex;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{stdin, stdout, Write};
 
 const PREVIEW_BRANCH_LIMIT: usize = 20;
@@ -204,44 +204,26 @@ impl Branches {
                 continue;
             }
 
-            // If neither of the above matched, merge main into the branch and see if it succeeds.
-            // If it can't cleanly merge, then it has likely been merged with Github squashes, and we
-            // can suggest it.
+            // If neither of the above matched, compare patch-equivalence against the base branch.
+            // If the branch has no unique patches, it was likely squash/cherry-picked and can be
+            // suggested for deletion.
             if options.squashes {
-                run_command(&["git", "checkout", &branch])?;
-                match run_command_with_status(&[
-                    "git",
-                    "pull",
-                    "--ff-only",
-                    &options.remote,
-                    &options.base_branch,
-                ]) {
-                    Ok(status) => {
-                        if !status.success() {
-                            println!(
-                                "{}",
-                                ui.warning(&format!(
-                                    "Branch {} appears to diverge from {}.",
-                                    branch, options.base_branch
-                                ))
-                            );
-                            branches.push(branch);
-                        }
+                match branch_has_no_unique_patches(options, &branch) {
+                    Ok(true) => {
+                        branches.push(branch);
                     }
+                    Ok(false) => {}
                     Err(err) => {
                         println!(
                             "{}",
                             ui.warning(&format!(
-                                "Encountered error trying to update branch {} with branch {}: {}",
+                                "Encountered error checking branch {} against {}: {}",
                                 branch, options.base_branch, err
                             ))
                         );
                         continue;
                     }
                 }
-
-                run_command(&["git", "reset", "--hard"])?;
-                run_command(&["git", "checkout", &options.base_branch])?;
             }
         }
 
@@ -381,31 +363,65 @@ struct BranchTracking {
     upstream_gone: bool,
 }
 
-fn local_branch_tracking() -> Result<HashMap<String, BranchTracking>, Error> {
+fn branch_has_no_unique_patches(options: &Options, branch: &str) -> Result<bool, Error> {
+    let range = format!("{}...{}", options.base_branch, branch);
     let cmd = run_command(&[
         "git",
-        "for-each-ref",
-        "--format=%(refname:short)\t%(upstream:short)\t%(upstream:track)",
-        "refs/heads",
+        "rev-list",
+        "--right-only",
+        "--cherry-pick",
+        "--no-merges",
+        &range,
     ])?;
     let output = String::from_utf8(cmd.stdout).map_err(|source| Error::CommandOutputEncoding {
-        command: "git for-each-ref".to_owned(),
+        command: "git rev-list".to_owned(),
         source,
     })?;
 
-    Ok(output
+    Ok(output.lines().next().is_none())
+}
+
+fn local_branch_tracking() -> Result<HashMap<String, BranchTracking>, Error> {
+    let local_refs_cmd = run_command(&[
+        "git",
+        "for-each-ref",
+        "--format=%(refname:short)\t%(upstream)",
+        "refs/heads",
+    ])?;
+    let local_refs_output = String::from_utf8(local_refs_cmd.stdout).map_err(|source| {
+        Error::CommandOutputEncoding {
+            command: "git for-each-ref refs/heads".to_owned(),
+            source,
+        }
+    })?;
+
+    let remote_refs_cmd =
+        run_command(&["git", "for-each-ref", "--format=%(refname)", "refs/remotes"])?;
+    let remote_refs_output = String::from_utf8(remote_refs_cmd.stdout).map_err(|source| {
+        Error::CommandOutputEncoding {
+            command: "git for-each-ref refs/remotes".to_owned(),
+            source,
+        }
+    })?;
+    let remote_refs = remote_refs_output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect::<HashSet<String>>();
+
+    Ok(local_refs_output
         .lines()
         .filter_map(|line| {
-            let mut fields = line.splitn(3, '\t');
+            let mut fields = line.splitn(2, '\t');
             let branch = fields.next()?.trim();
             if branch.is_empty() {
                 return None;
             }
 
-            let upstream = fields.next().unwrap_or_default().trim();
-            let track = fields.next().unwrap_or_default().trim();
-            let has_upstream = !upstream.is_empty();
-            let upstream_gone = has_upstream && track.contains("gone");
+            let upstream_ref = fields.next().unwrap_or_default().trim();
+            let has_upstream = !upstream_ref.is_empty();
+            let upstream_gone = has_upstream && !remote_refs.contains(upstream_ref);
 
             Some((
                 branch.to_owned(),

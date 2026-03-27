@@ -186,6 +186,36 @@ fn test_git_clean_deletes_gone_upstream_branch_without_d_flag() {
 }
 
 #[test]
+fn test_git_clean_squashes_check_is_non_mutating() {
+    let project = project("git-clean_squashes_non_mutating")
+        .build()
+        .setup_remote();
+
+    let touch_feature_file = touch_command!(project, "feature_only.txt");
+
+    project.batch_setup_commands(&[
+        "git checkout -b feature",
+        &touch_feature_file,
+        "git add .",
+        "git commit -am Feature",
+        "git push origin HEAD",
+        "git checkout main",
+    ]);
+
+    // This untracked path conflicts with a tracked file on `feature`.
+    // The old checkout-based squashes logic would fail here.
+    project.setup_command(&touch_feature_file);
+
+    let result = project.git_clean_command("-y --dry-run --squashes").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed without mutating checkouts")
+    );
+}
+
+#[test]
 fn test_git_clean_works_with_squashes_with_flag() {
     let project = project("git-clean_github_squashes").build().setup_remote();
 

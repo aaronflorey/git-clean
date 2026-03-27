@@ -2,7 +2,7 @@ use crate::support::project;
 
 #[test]
 fn test_git_clean_removes_local_branches() {
-    let project = project("git-clean_removes_local").build();
+    let project = project("git-clean_removes_local").build().setup_remote();
 
     project.setup_command("git branch test1");
     project.setup_command("git branch test2");
@@ -41,7 +41,7 @@ fn test_git_clean_removes_local_branches() {
 
 #[test]
 fn test_git_clean_does_not_remove_ignored_local_branches() {
-    let project = project("git-clean_removes_local").build();
+    let project = project("git-clean_removes_local").build().setup_remote();
 
     project.setup_command("git branch test1");
     project.setup_command("git branch test2");
@@ -80,7 +80,7 @@ fn test_git_clean_does_not_remove_ignored_local_branches() {
 
 #[test]
 fn test_git_clean_does_not_remove_list_of_ignored_local_branches() {
-    let project = project("git-clean_removes_local").build();
+    let project = project("git-clean_removes_local").build().setup_remote();
 
     project.setup_command("git branch test1");
     project.setup_command("git branch test2");
@@ -130,7 +130,9 @@ fn test_git_clean_does_not_remove_list_of_ignored_local_branches() {
 
 #[test]
 fn test_git_clean_handles_base_branch_regex_metacharacters() {
-    let project = project("git-clean_base_branch_regex_metacharacters").build();
+    let project = project("git-clean_base_branch_regex_metacharacters")
+        .build()
+        .setup_remote();
 
     project.setup_command("git branch -m main(test)");
 
@@ -152,7 +154,7 @@ fn test_git_clean_handles_base_branch_regex_metacharacters() {
 
 #[test]
 fn test_git_clean_dry_run_does_not_remove_local_branches() {
-    let project = project("git-clean_dry_run_local").build();
+    let project = project("git-clean_dry_run_local").build().setup_remote();
 
     project.setup_command("git branch test1");
     project.setup_command("git branch test2");

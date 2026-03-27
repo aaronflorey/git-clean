@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::io::Error as IOError;
-use std::process::{Command, ExitStatus, Output, Stdio};
+use std::process::{Command, Output, Stdio};
 
 use crate::branches::Branches;
 use crate::error::Error;
@@ -11,16 +11,26 @@ fn command_to_string(args: &[&str]) -> String {
 }
 
 pub fn run_command_with_no_output(args: &[&str]) -> Result<(), Error> {
-    Command::new(args[0])
+    let output = Command::new(args[0])
         .args(&args[1..])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .output()
         .map_err(|source| Error::CommandExecution {
             command: command_to_string(args),
             source,
         })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(Error::CommandFailed {
+            command: command_to_string(args),
+            code: output.status.code(),
+            stderr,
+        });
+    }
+
     Ok(())
 }
 
@@ -43,15 +53,6 @@ pub fn run_command(args: &[&str]) -> Result<Output, Error> {
 
 pub fn run_command_with_result(args: &[&str]) -> Result<Output, IOError> {
     Command::new(args[0]).args(&args[1..]).output()
-}
-
-pub fn run_command_with_status(args: &[&str]) -> Result<ExitStatus, IOError> {
-    Command::new(args[0])
-        .args(&args[1..])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
 }
 
 pub fn validate_git_installation() -> Result<(), Error> {
@@ -199,6 +200,18 @@ mod test {
                 assert_eq!(command, "git-clean-command-that-does-not-exist --version")
             }
             other => panic!("Expected CommandExecution, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_run_command_with_no_output_returns_error_on_non_zero_exit() {
+        let err = run_command_with_no_output(&["git", "this-command-does-not-exist"]).unwrap_err();
+
+        match err {
+            Error::CommandFailed { command, .. } => {
+                assert_eq!(command, "git this-command-does-not-exist")
+            }
+            other => panic!("Expected CommandFailed, found {:?}", other),
         }
     }
 }

@@ -3,6 +3,14 @@
 ### Changes
 - Don't delete unpushed branches by default - by @tpilewicz
 
+## [0.10.1](https://github.com/aaronflorey/git-clean/compare/v0.10.0...v0.10.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* cull gone-upstream branches without -d ([f877a4b](https://github.com/aaronflorey/git-clean/commit/f877a4b0728960fc6988b14596c3772f7456cb15))
+* harden cleanup detection and command failures ([9f6a1ec](https://github.com/aaronflorey/git-clean/commit/9f6a1ec9c1db60a39423b7edea52a601c3a1d46b))
+
 ## [0.10.0](https://github.com/aaronflorey/git-clean/compare/v0.9.0...v0.10.0) (2026-03-25)
 
 

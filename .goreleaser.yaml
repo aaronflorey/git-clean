@@ -30,3 +30,14 @@ archives:
 
 checksum:
   name_template: checksums.txt
+
+brews:
+  - name: git-clean
+    repository:
+      owner: aaronflorey
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/aaronflorey/git-clean"
+    description: "Clean stale Git branches safely"

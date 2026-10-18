@@ -1,6 +1,35 @@
 use crate::support::project;
 
 #[test]
+fn test_git_clean_reports_local_deletion_failure() {
+    let project = project("git-clean_local_deletion_failure")
+        .build()
+        .setup_remote();
+    project.setup_command("git branch locked");
+    std::fs::write(project.path().join(".git/refs/heads/locked.lock"), "").unwrap();
+
+    let result = project.git_clean_command("-y -l").run();
+
+    assert!(
+        !result.is_success(),
+        "{}",
+        result.failure_message("command to fail when local deletion fails")
+    );
+    assert!(
+        result
+            .stdout()
+            .contains("Command `git branch -D locked` failed"),
+        "{}",
+        result.failure_message("local deletion failure context")
+    );
+    assert!(result.stdout().contains("locked.lock"));
+    assert!(project
+        .setup_command("git branch")
+        .stdout()
+        .contains("locked"));
+}
+
+#[test]
 fn test_git_clean_removes_local_branches() {
     let project = project("git-clean_removes_local").build().setup_remote();
 

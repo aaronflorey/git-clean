@@ -45,10 +45,20 @@ pub fn output(args: &[&str]) -> Result<String, Error> {
 }
 
 pub fn run_command(args: &[&str]) -> Result<Output, Error> {
-    run_command_with_result(args).map_err(|source| Error::CommandExecution {
+    let output = run_command_with_result(args).map_err(|source| Error::CommandExecution {
         command: command_to_string(args),
         source,
-    })
+    })?;
+
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: command_to_string(args),
+            code: output.status.code(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        });
+    }
+
+    Ok(output)
 }
 
 pub fn run_command_with_result(args: &[&str]) -> Result<Output, IOError> {

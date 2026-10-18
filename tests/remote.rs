@@ -1,6 +1,35 @@
 use crate::support::project;
 
 #[test]
+fn test_git_clean_reports_remote_deletion_failure() {
+    let project = project("git-clean_remote_deletion_failure")
+        .build()
+        .setup_remote();
+    project.batch_setup_commands(&["git branch protected", "git push origin protected"]);
+    project.remote_setup_command("git config receive.denyDeletes true");
+
+    let result = project.git_clean_command("-y -r").run();
+
+    assert!(
+        !result.is_success(),
+        "{}",
+        result.failure_message("command to fail when remote deletion fails")
+    );
+    assert!(
+        result
+            .stdout()
+            .contains("Command `git push origin --delete protected` failed"),
+        "{}",
+        result.failure_message("remote deletion failure context")
+    );
+    assert!(result.stdout().contains("remote rejected"));
+    assert!(project
+        .remote_setup_command("git branch")
+        .stdout()
+        .contains("protected"));
+}
+
+#[test]
 fn test_git_clean_removes_remote_branches() {
     let project = project("git-clean_removes_remote").build().setup_remote();
 

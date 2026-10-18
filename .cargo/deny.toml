@@ -14,13 +14,10 @@ highlight = "all"
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "deny"
-unmaintained = "warn"
+unmaintained = "all"
 yanked = "warn"
-unsound = "deny"
+unsound = "all"
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-
-[sources.allow-registry]

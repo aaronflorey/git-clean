@@ -6,7 +6,7 @@ useDefault = true
 [[allowlists]]
 targetRules = ["generic-password"]
 paths = [
-    '^tests/',
-    '\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$',
-    '(?:^|/)__tests__/',
+  "^tests/",
+  '\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$',
+  "(?:^|/)__tests__/",
 ]

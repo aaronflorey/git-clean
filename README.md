@@ -5,6 +5,7 @@
 `git-clean` deletes branches that are already merged into your base branch (default: `main`).
 
 It can delete:
+
 - local branches
 - remote branches
 - both (default)
@@ -12,15 +13,25 @@ It can delete:
 ## Requirements
 
 - `git` installed and available in `PATH`
-- Rust `1.74+` only if building from source
+- A Rust toolchain only if building from source (development uses the version in `mise.toml`)
 
 ## Install
 
-Using [`bin`](https://github.com/marcosnils/bin) (recommended):
+Using Homebrew (recommended):
 
 ```bash
-bin install aaronflorey/git-clean
+brew install aaronflorey/tap/git-clean
 ```
+
+Using [`bin`](https://github.com/aaronflorey/bin):
+
+```bash
+bin install github.com/aaronflorey/git-clean
+```
+
+Alternatively, download an archive for your OS and architecture from
+[GitHub Releases](https://github.com/aaronflorey/git-clean/releases), verify it
+against `checksums.txt`, and put the extracted executable in your `PATH`.
 
 With Cargo from this fork (not crates.io):
 
@@ -101,10 +112,38 @@ color_mode = "auto"
 
 ## Development
 
+Install [mise](https://mise.jdx.dev/) and Git, then set up the pinned tools and
+repository hooks:
+
+```bash
+mise install
+mise run hooks
+```
+
+The toolchain needs the rustfmt and Clippy components (`rustup component add rustfmt clippy`
+if they are missing). The pinned Node runtime supplies npm for the existing filename linter.
+
+```bash
+mise run build
+mise run test
+mise run lint
+mise run check
+```
+
+`mise run format` formats Rust; `mise run fix` runs the configured hook fixers.
+`check` runs all existing repository checks, including dependency and secret checks.
+Hooks check Conventional Commit messages (`feat:`, `fix:`, `chore:`) for release-please.
+The equivalent native Rust checks remain available:
+
 ```bash
 cargo fmt -- --check
 cargo test --locked
+cargo clippy --locked --all-targets --all-features -- -D warnings
 ```
+
+CI tests stable, beta, and nightly Rust (nightly failures are allowed) and checks
+formatting. See [development and release notes](docs/DEVELOPMENT.md) for validation
+limits and release prerequisites.
 
 ## License
 

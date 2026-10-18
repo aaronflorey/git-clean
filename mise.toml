@@ -1,8 +1,9 @@
 [tools]
 betterleaks = "1.9.0"
-"cargo:cargo-deny" = "0.20.2"
+"aqua:EmbarkStudios/cargo-deny" = "0.20.2"
 hk = { version = "2.7.0", workflow = "release.yml" }
 "npm:@ls-lint/ls-lint" = "2.3.1"
+node = "26.12.0"
 pinact = "5.0.0"
 pkl = "0.32.1"
 rust = "1.99.1"
@@ -11,3 +12,12 @@ zizmor = "1.31.1"
 
 [env]
 BETTERLEAKS_CONFIG = "{{ config_root }}/.betterleaks.toml"
+
+[tasks]
+build = "cargo build --locked"
+test = "cargo test --locked"
+lint = "cargo clippy --locked --all-targets --all-features -- -D warnings"
+format = "cargo fmt"
+check = "hk check --all"
+fix = "hk fix --all"
+hooks = "hk install --mise"

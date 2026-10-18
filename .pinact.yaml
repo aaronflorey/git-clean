@@ -1,3 +1,7 @@
 version: 3
 min_age:
   value: 7
+ignore_actions:
+  # Upstream uses Rust channel branches rather than versioned action releases.
+  - name: ^dtolnay/rust-toolchain$
+    ref: ^b725eda525362e7cf34af9a7243cac1e3f01a7ec$

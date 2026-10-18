@@ -11,10 +11,13 @@ autotests = false
 edition = "2021"
 rust-version = "1.74"
 
+[[test]]
+name = "tests"
+
 [dependencies]
 clap = "4.5"
-regex = "1.12"
 directories = "5.0"
+regex = "1.12"
 toml = "0.8"
 
 [dependencies.serde]
@@ -24,29 +27,26 @@ features = ["derive"]
 [dev-dependencies]
 tempfile = "3.17"
 
-[[test]]
-name = "tests"
-
 [lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
-panic_in_result_fn = "deny"
 allow_attributes = "deny"
-dbg_macro = "deny"
-todo = "deny"
-unimplemented = "deny"
-print_stdout = "deny"
-print_stderr = "deny"
 await_holding_lock = "deny"
+dbg_macro = "deny"
+doc_markdown = "allow"
 exit = "deny"
+expect_used = "deny"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
-doc_markdown = "allow"
-must_use_candidate = "allow"
 module_name_repetitions = "allow"
+must_use_candidate = "allow"
+panic = "deny"
+panic_in_result_fn = "deny"
+print_stderr = "deny"
+print_stdout = "deny"
 similar_names = "allow"
+todo = "deny"
 too_many_lines = "allow"
+unimplemented = "deny"
+unwrap_used = "deny"
 
 [lints.clippy.pedantic]
 level = "warn"

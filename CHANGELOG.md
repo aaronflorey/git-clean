@@ -3,6 +3,13 @@
 ### Changes
 - Don't delete unpushed branches by default - by @tpilewicz
 
+## [0.11.0](https://github.com/aaronflorey/git-clean/compare/v0.10.1...v0.11.0) (2026-10-18)
+
+
+### Features
+
+* surface errors from git ([88c49bb](https://github.com/aaronflorey/git-clean/commit/88c49bb08e54b1ad7d59839cb0c30747cf71f2e9))
+
 ## [0.10.1](https://github.com/aaronflorey/git-clean/compare/v0.10.0...v0.10.1) (2026-03-27)
 
 

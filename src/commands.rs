@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::io::Error as IOError;
 use std::process::{Command, Output, Stdio};
 
@@ -100,93 +100,56 @@ pub fn delete_local_branches(branches: &Branches) -> Result<String, Error> {
     Ok(rows.join("\n"))
 }
 
+/// Names of the branches on `remote` as of the last fetch, without the `<remote>/` prefix.
+pub fn remote_branch_names(remote: &str) -> Result<HashSet<String>, Error> {
+    let prefix = format!("refs/remotes/{remote}/");
+    let refs = output(&[
+        "git",
+        "for-each-ref",
+        "--format=%(refname)",
+        &format!("refs/remotes/{remote}"),
+    ])?;
+
+    Ok(refs
+        .lines()
+        .filter_map(|refname| refname.strip_prefix(&prefix))
+        // `<remote>/HEAD` is a symbolic ref to the default branch, not a branch of its own.
+        .filter(|name| *name != "HEAD")
+        .map(str::to_owned)
+        .collect())
+}
+
 pub fn delete_remote_branches(branches: &Branches, options: &Options) -> Result<String, Error> {
-    let remote_branches_cmd = run_command(&["git", "branch", "-r"])?;
-
-    let s = String::from_utf8(remote_branches_cmd.stdout).map_err(|source| {
-        Error::CommandOutputEncoding {
-            command: "git branch -r".to_owned(),
-            source,
-        }
-    })?;
-    let all_remote_branches = s.split('\n').collect::<Vec<&str>>();
-    let origin_for_trim = &format!("{}/", options.remote)[..];
-    let b_tree_remotes = all_remote_branches
+    let remote_branches = remote_branch_names(&options.remote)?;
+    let targets: Vec<&str> = branches
+        .vec
         .iter()
-        .map(|b| b.trim().trim_start_matches(origin_for_trim).to_owned())
-        .collect::<BTreeSet<String>>();
-
-    let mut b_tree_branches = BTreeSet::new();
-
-    for branch in branches.vec.clone() {
-        b_tree_branches.insert(branch);
-    }
-
-    let intersection: Vec<_> = b_tree_remotes
-        .intersection(&b_tree_branches)
-        .cloned()
+        .filter(|branch| remote_branches.contains(*branch))
+        .map(String::as_str)
         .collect();
 
-    let stderr = if intersection.is_empty() {
-        String::default()
-    } else {
-        let delete_branches_args = intersection.iter().fold(
-            vec!["git", "push", &options.remote, "--delete"],
-            |mut acc, b| {
-                acc.push(b);
-                acc
-            },
-        );
-        let delete_remote_branches_cmd = run_command(&delete_branches_args)?;
-        String::from_utf8(delete_remote_branches_cmd.stderr).map_err(|source| {
-            Error::CommandOutputEncoding {
-                command: command_to_string(&delete_branches_args),
-                source,
-            }
-        })?
-    };
-
-    // Everything is written to stderr, so we need to process that
-    let split = stderr.split('\n');
-    let vec: Vec<&str> = split.collect();
-    let mut output = vec![];
-    for s in vec {
-        if s.contains("error: unable to delete '") {
-            let branch = s
-                .trim_start_matches("error: unable to delete '")
-                .trim_end_matches("': remote ref does not exist");
-
-            output.push(branch.to_owned() + " was already deleted in the remote.");
-        } else if s.contains(" - [deleted]") {
-            output.push(s.to_owned());
-        }
+    if targets.is_empty() {
+        return Ok(String::default());
     }
 
-    Ok(output.join("\n"))
+    // git exits non-zero unless every ref was deleted, and that error carries its full output.
+    let mut delete_branches_args = vec!["git", "push", &options.remote, "--delete"];
+    delete_branches_args.extend(&targets);
+    run_command(&delete_branches_args)?;
+
+    Ok(targets
+        .iter()
+        .map(|branch| format!("Deleted remote branch {}/{}", options.remote, branch))
+        .collect::<Vec<String>>()
+        .join("\n"))
 }
 
 #[cfg(test)]
 mod test {
 
     use crate::error::Error;
-    use regex::Regex;
 
     use super::{run_command, run_command_with_no_output};
-
-    // `spawn_piped` was removed so this test is somewhat outdated.
-    // It now tests the match operation for which `grep` was used before.
-    #[test]
-    fn test_spawn_piped() {
-        let echo = Regex::new("foo\n").unwrap();
-        assert_eq!(
-            echo.captures_iter("foo\nbar\nbaz")
-                .fold(String::new(), |mut acc, e| {
-                    acc.push_str(&e[0]);
-                    acc
-                }),
-            "foo\n"
-        );
-    }
 
     #[test]
     fn test_run_command_returns_typed_error_with_command_context() {

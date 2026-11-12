@@ -126,7 +126,7 @@ fn test_git_clean_does_not_remove_ignored_remote_branches() {
 }
 
 fn deleted_branch_output(branch: &str) -> String {
-    format!(" - [deleted]         {}", branch)
+    format!("Deleted remote branch origin/{}", branch)
 }
 
 #[test]

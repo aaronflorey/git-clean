@@ -253,7 +253,7 @@ fn test_git_clean_works_with_squashes_with_flag() {
     assert!(
         result
             .stdout()
-            .contains(" - [deleted]         github_squash"),
+            .contains("Deleted remote branch origin/github_squash"),
         "{}",
         result.failure_message("command to delete github_squash in remote")
     );
@@ -304,7 +304,7 @@ fn test_git_clean_ignores_squashes_without_flag() {
     assert!(
         !result
             .stdout()
-            .contains(" - [deleted]         github_squash"),
+            .contains("Deleted remote branch origin/github_squash"),
         "{}",
         result.failure_message("command not to delete github_squash in remote")
     );
@@ -312,5 +312,36 @@ fn test_git_clean_ignores_squashes_without_flag() {
         !result.stdout().contains("Deleted branch github_squash"),
         "{}",
         result.failure_message("command not to delete github_squash locally")
+    );
+}
+
+#[test]
+fn test_git_clean_d_flag_keeps_pushed_branch_named_after_base_branch() {
+    let project = project("git-clean_pushed_main_named_branch")
+        .build()
+        .setup_remote();
+
+    let touch_command = touch_command!(project, "file2.txt");
+
+    project.batch_setup_commands(&[
+        "git checkout -b fix-main-bug",
+        &touch_command,
+        "git add .",
+        "git commit -am Fix",
+        "git push origin HEAD",
+        "git checkout main",
+    ]);
+
+    let result = project.git_clean_command("-y -l -d").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed")
+    );
+    assert!(
+        !result.stdout().contains("Deleted branch fix-main-bug"),
+        "{}",
+        result.failure_message("command not to delete pushed fix-main-bug")
     );
 }

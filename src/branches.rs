@@ -1,11 +1,11 @@
 use crate::commands::{
-    delete_local_branches, delete_remote_branches, output, run_command, run_command_with_no_output,
+    delete_local_branches, delete_remote_branches, output, remote_branch_names, run_command,
+    run_command_with_no_output,
 };
 use crate::error::Error;
 use crate::options::{DeleteMode, Options};
 use crate::ui::Ui;
-use regex::Regex;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::{stdin, stdout, Write};
 
 const PREVIEW_BRANCH_LIMIT: usize = 20;
@@ -113,32 +113,7 @@ impl Branches {
         .map(str::to_owned)
         .collect::<HashSet<String>>();
 
-        let escaped_base_branch = regex::escape(&options.base_branch);
-        let remote_branches_regex = format!("\\b(HEAD|{escaped_base_branch})\\b");
-        let remote_branches_filter =
-            Regex::new(&remote_branches_regex).map_err(|source| Error::InvalidPattern {
-                field: "base branch",
-                value: options.base_branch.clone(),
-                source,
-            })?;
-        let remote_branches_cmd = run_command(&["git", "branch", "-r"])?;
-        let remote_branches_output =
-            String::from_utf8(remote_branches_cmd.stdout).map_err(|source| {
-                Error::CommandOutputEncoding {
-                    command: "git branch -r".to_owned(),
-                    source,
-                }
-            })?;
-
-        let remote_branches =
-            remote_branches_output
-                .lines()
-                .fold(Vec::<String>::new(), |mut acc, line| {
-                    if !remote_branches_filter.is_match(line) {
-                        acc.push(line.trim().to_string());
-                    }
-                    acc
-                });
+        let remote_branches = remote_branch_names(&options.remote)?;
 
         let local_branches = local_branches()?.into_iter().filter(|branch| {
             branch.name != options.base_branch && !options.ignored_branches.contains(&branch.name)
@@ -157,9 +132,7 @@ impl Branches {
             // way to determine if we want to suggest to delete it.
             if options.delete_unpushed_branches
                 && !local.has_upstream
-                && !remote_branches
-                    .iter()
-                    .any(|b: &String| *b == format!("{}/{}", options.remote, branch))
+                && !remote_branches.contains(&branch)
             {
                 branches.push(branch);
                 continue;
@@ -228,7 +201,7 @@ impl Branches {
     }
 
     fn grouped_preview(&self, options: &Options) -> Result<GroupedPreview, Error> {
-        let remote_branches = remote_branch_names(options)?;
+        let remote_branches = remote_branch_names(&options.remote)?;
         let mut grouped = GroupedPreview::default();
 
         match options.delete_mode {
@@ -339,21 +312,6 @@ fn format_preview_list(branches: &[String]) -> String {
     }
 
     rows.join("\n")
-}
-
-fn remote_branch_names(options: &Options) -> Result<BTreeSet<String>, Error> {
-    let cmd = run_command(&["git", "branch", "-r"])?;
-    let output = String::from_utf8(cmd.stdout).map_err(|source| Error::CommandOutputEncoding {
-        command: "git branch -r".to_owned(),
-        source,
-    })?;
-    let remote_prefix = format!("{}/", options.remote);
-
-    Ok(output
-        .lines()
-        .map(str::trim)
-        .map(|line| line.trim_start_matches(&remote_prefix).to_owned())
-        .collect())
 }
 
 struct LocalBranch {

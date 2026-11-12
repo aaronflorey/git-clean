@@ -10,6 +10,8 @@ It can delete:
 - remote branches
 - both (default)
 
+When a local branch is checked out in a linked worktree, that worktree is removed first. A branch is skipped if its worktree has uncommitted or untracked changes, is locked, or is the main worktree. Ignored files in removed worktrees are deleted along with them.
+
 ## Requirements
 
 - `git` installed and available in `PATH`

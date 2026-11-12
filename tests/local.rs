@@ -223,3 +223,55 @@ fn test_git_clean_dry_run_does_not_remove_local_branches() {
         verify.failure_message("test2 to remain after dry run")
     );
 }
+
+#[test]
+fn test_git_clean_removes_worktree_of_merged_branch() {
+    let project = project("git-clean_removes_worktree").build().setup_remote();
+    project.setup_command("git branch merged");
+    project.setup_command("git worktree add wt merged");
+
+    let result = project.git_clean_command("-y -l").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed")
+    );
+    assert!(
+        result.stdout().contains("Removed worktree"),
+        "{}",
+        result.failure_message("command to remove the worktree")
+    );
+    assert!(
+        result.stdout().contains("Deleted branch merged"),
+        "{}",
+        result.failure_message("command to delete merged")
+    );
+    assert!(!project.path().join("wt").exists());
+}
+
+#[test]
+fn test_git_clean_skips_branch_with_dirty_worktree() {
+    let project = project("git-clean_dirty_worktree").build().setup_remote();
+    project.setup_command("git branch dirty");
+    project.setup_command("git worktree add wt dirty");
+    std::fs::write(project.path().join("wt/untracked.txt"), "").unwrap();
+
+    let result = project.git_clean_command("-y -l").run();
+
+    assert!(
+        result.is_success(),
+        "{}",
+        result.failure_message("command to succeed")
+    );
+    assert!(
+        result.stdout().contains("Skipping dirty"),
+        "{}",
+        result.failure_message("command to report the skipped branch")
+    );
+    assert!(project.path().join("wt/untracked.txt").exists());
+    assert!(project
+        .setup_command("git branch")
+        .stdout()
+        .contains("dirty"));
+}

@@ -61,7 +61,11 @@ impl DeleteMode {
             Remote => "remotely:",
             Both => "locally and remotely:",
         };
-        format!("The following branches will be deleted {}", source)
+        format!("The following branches will be deleted {source}")
+    }
+
+    pub fn deletes_local(&self) -> bool {
+        matches!(self, Local | Both)
     }
 
     pub fn as_str(&self) -> &'static str {
@@ -225,7 +229,7 @@ impl Options {
 
         if current_branch != self.base_branch {
             return Err(Error::CurrentBranchInvalid);
-        };
+        }
 
         Ok(())
     }

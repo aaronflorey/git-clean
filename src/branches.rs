@@ -1,6 +1,8 @@
-use crate::commands::*;
+use crate::commands::{
+    delete_local_branches, delete_remote_branches, output, run_command, run_command_with_no_output,
+};
 use crate::error::Error;
-use crate::options::*;
+use crate::options::{DeleteMode, Options};
 use crate::ui::Ui;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -11,13 +13,11 @@ const PREVIEW_BRANCH_LIMIT: usize = 20;
 #[derive(Debug)]
 pub struct Branches {
     pub vec: Vec<String>,
+    /// Worktrees that must be removed before their branches can be deleted locally.
+    pub worktrees: Vec<String>,
 }
 
 impl Branches {
-    pub fn new(branches: Vec<String>) -> Branches {
-        Branches { vec: branches }
-    }
-
     pub fn print_warning_and_prompt(&self, options: &Options, ui: &Ui) -> Result<(), Error> {
         let grouped = self.grouped_preview(options)?;
 
@@ -65,6 +65,17 @@ impl Branches {
             println!("{}", format_preview_list(&grouped.remote_only));
         }
 
+        if options.delete_mode.deletes_local() && !self.worktrees.is_empty() {
+            println!(
+                "{}",
+                ui.key_value(
+                    "worktrees removed",
+                    &format!("{} worktree(s)", self.worktrees.len())
+                )
+            );
+            println!("{}", format_preview_list(&self.worktrees));
+        }
+
         print!("{}", ui.prompt("Continue? (Y/n) "));
         stdout().flush()?;
 
@@ -91,64 +102,19 @@ impl Branches {
         );
         run_command_with_no_output(&["git", "remote", "update", &options.remote, "--prune"])?;
 
+        let merged_branches = output(&[
+            "git",
+            "for-each-ref",
+            &format!("--merged={}", options.base_branch),
+            "--format=%(refname:lstrip=2)",
+            "refs/heads",
+        ])?
+        .lines()
+        .map(str::to_owned)
+        .collect::<HashSet<String>>();
+
         let escaped_base_branch = regex::escape(&options.base_branch);
-
-        let merged_branches_regex = format!("^\\*?\\s*{}$", &escaped_base_branch);
-        let merged_branches_filter =
-            Regex::new(&merged_branches_regex).map_err(|source| Error::InvalidPattern {
-                field: "base branch",
-                value: options.base_branch.clone(),
-                source,
-            })?;
-        let merged_branches_cmd = run_command(&["git", "branch", "--merged"])?;
-        let merged_branches_output =
-            String::from_utf8(merged_branches_cmd.stdout).map_err(|source| {
-                Error::CommandOutputEncoding {
-                    command: "git branch --merged".to_owned(),
-                    source,
-                }
-            })?;
-
-        let merged_branches =
-            merged_branches_output
-                .lines()
-                .fold(Vec::<String>::new(), |mut acc, line| {
-                    if !merged_branches_filter.is_match(line) {
-                        acc.push(line.trim().to_string());
-                    }
-                    acc
-                });
-
-        let local_branches_regex = format!("^\\*?\\s*{}$", &escaped_base_branch);
-        let local_branches_filter =
-            Regex::new(&local_branches_regex).map_err(|source| Error::InvalidPattern {
-                field: "base branch",
-                value: options.base_branch.clone(),
-                source,
-            })?;
-        let local_branches_cmd = run_command(&["git", "branch"])?;
-        let local_branches_output =
-            String::from_utf8(local_branches_cmd.stdout).map_err(|source| {
-                Error::CommandOutputEncoding {
-                    command: "git branch".to_owned(),
-                    source,
-                }
-            })?;
-
-        let local_branches = local_branches_output
-            .lines()
-            .fold(Vec::<String>::new(), |mut acc, line| {
-                if !local_branches_filter.is_match(line) {
-                    acc.push(line.trim().to_string());
-                }
-                acc
-            })
-            .iter()
-            .filter(|branch| !options.ignored_branches.contains(branch))
-            .cloned()
-            .collect::<Vec<String>>();
-
-        let remote_branches_regex = format!("\\b(HEAD|{})\\b", &escaped_base_branch);
+        let remote_branches_regex = format!("\\b(HEAD|{escaped_base_branch})\\b");
         let remote_branches_filter =
             Regex::new(&remote_branches_regex).map_err(|source| Error::InvalidPattern {
                 field: "base branch",
@@ -174,33 +140,35 @@ impl Branches {
                     acc
                 });
 
-        let tracking = local_branch_tracking()?;
+        let local_branches = local_branches()?.into_iter().filter(|branch| {
+            branch.name != options.base_branch && !options.ignored_branches.contains(&branch.name)
+        });
 
-        for branch in local_branches {
-            let tracking_info = tracking.get(&branch).cloned().unwrap_or_default();
+        for local in local_branches {
+            let branch = local.name;
 
             // Branch tracks a remote ref that no longer exists.
-            if tracking_info.upstream_gone {
-                branches.push(branch.to_owned());
+            if local.upstream_gone {
+                branches.push(branch);
                 continue;
             }
 
             // First check if the local branch doesn't exist in the remote, it's the cheapest and easiest
             // way to determine if we want to suggest to delete it.
             if options.delete_unpushed_branches
-                && !tracking_info.has_upstream
+                && !local.has_upstream
                 && !remote_branches
                     .iter()
-                    .any(|b: &String| *b == format!("{}/{}", &options.remote, branch))
+                    .any(|b: &String| *b == format!("{}/{}", options.remote, branch))
             {
-                branches.push(branch.to_owned());
+                branches.push(branch);
                 continue;
             }
 
             // If it does exist in the remote, check to see if it's listed in git branches --merged. If
             // it is, that means it wasn't merged using Github squashes, and we can suggest it.
             if merged_branches.contains(&branch) {
-                branches.push(branch.to_owned());
+                branches.push(branch);
                 continue;
             }
 
@@ -227,12 +195,36 @@ impl Branches {
             }
         }
 
-        // if deleted in remote, list
-        //
-        // g branch -d -r <remote>/<branch>
-        // g branch -d <branch>
+        // git refuses to delete a branch that is checked out in a worktree, so its worktree is
+        // removed first. Worktrees that still hold work are left alone along with their branch.
+        let mut checked_out = branch_worktrees()?;
+        let mut deletable = Vec::with_capacity(branches.len());
+        let mut worktrees = Vec::new();
+        for branch in branches {
+            let Some(worktree) = checked_out.remove(&branch) else {
+                deletable.push(branch);
+                continue;
+            };
 
-        Ok(Branches::new(branches))
+            if let Some(reason) = worktree_blocker(&worktree)? {
+                println!(
+                    "{}",
+                    ui.warning(&format!(
+                        "Skipping {}: worktree {} {}",
+                        branch, worktree.path, reason
+                    ))
+                );
+                continue;
+            }
+
+            deletable.push(branch);
+            worktrees.push(worktree.path);
+        }
+
+        Ok(Branches {
+            vec: deletable,
+            worktrees,
+        })
     }
 
     fn grouped_preview(&self, options: &Options) -> Result<GroupedPreview, Error> {
@@ -313,6 +305,13 @@ impl Branches {
             ));
         }
 
+        if options.delete_mode.deletes_local() && !self.worktrees.is_empty() {
+            rows.push(format!(
+                "Would remove worktrees: {}",
+                self.worktrees.join(", ")
+            ));
+        }
+
         Ok(rows.join("\n"))
     }
 }
@@ -329,7 +328,7 @@ fn format_preview_list(branches: &[String]) -> String {
     let mut rows: Vec<String> = branches
         .iter()
         .take(PREVIEW_BRANCH_LIMIT)
-        .map(|branch| format!("  - {}", branch))
+        .map(|branch| format!("  - {branch}"))
         .collect();
 
     if branches.len() > PREVIEW_BRANCH_LIMIT {
@@ -357,10 +356,72 @@ fn remote_branch_names(options: &Options) -> Result<BTreeSet<String>, Error> {
         .collect())
 }
 
-#[derive(Clone, Copy, Default)]
-struct BranchTracking {
+struct LocalBranch {
+    name: String,
     has_upstream: bool,
     upstream_gone: bool,
+}
+
+struct Worktree {
+    path: String,
+    main: bool,
+    locked: bool,
+    prunable: bool,
+}
+
+/// Maps each branch checked out in a worktree to that worktree.
+fn branch_worktrees() -> Result<HashMap<String, Worktree>, Error> {
+    let porcelain = output(&["git", "worktree", "list", "--porcelain"])?;
+    let mut worktrees = HashMap::new();
+
+    // The first entry is always the main worktree.
+    for (index, entry) in porcelain.split("\n\n").enumerate() {
+        let mut path = None;
+        let mut branch = None;
+        let mut locked = false;
+        let mut prunable = false;
+        for line in entry.lines() {
+            let (key, value) = line.split_once(' ').unwrap_or((line, ""));
+            match key {
+                "worktree" => path = Some(value),
+                "branch" => branch = value.strip_prefix("refs/heads/"),
+                "locked" => locked = true,
+                "prunable" => prunable = true,
+                _ => {}
+            }
+        }
+
+        if let (Some(path), Some(branch)) = (path, branch) {
+            worktrees.insert(
+                branch.to_owned(),
+                Worktree {
+                    path: path.to_owned(),
+                    main: index == 0,
+                    locked,
+                    prunable,
+                },
+            );
+        }
+    }
+
+    Ok(worktrees)
+}
+
+/// Mirrors the checks `git worktree remove` makes without `--force`.
+fn worktree_blocker(worktree: &Worktree) -> Result<Option<&'static str>, Error> {
+    if worktree.main {
+        return Ok(Some("is the main worktree"));
+    }
+    if worktree.locked {
+        return Ok(Some("is locked"));
+    }
+    // A prunable worktree's directory is gone, so there is nothing left to lose.
+    if worktree.prunable {
+        return Ok(None);
+    }
+
+    let status = output(&["git", "-C", &worktree.path, "status", "--porcelain"])?;
+    Ok((!status.is_empty()).then_some("has uncommitted changes"))
 }
 
 fn branch_has_no_unique_patches(options: &Options, branch: &str) -> Result<bool, Error> {
@@ -381,11 +442,11 @@ fn branch_has_no_unique_patches(options: &Options, branch: &str) -> Result<bool,
     Ok(output.lines().next().is_none())
 }
 
-fn local_branch_tracking() -> Result<HashMap<String, BranchTracking>, Error> {
+fn local_branches() -> Result<Vec<LocalBranch>, Error> {
     let local_refs_cmd = run_command(&[
         "git",
         "for-each-ref",
-        "--format=%(refname:short)\t%(upstream)",
+        "--format=%(refname:lstrip=2)\t%(upstream)",
         "refs/heads",
     ])?;
     let local_refs_output = String::from_utf8(local_refs_cmd.stdout).map_err(|source| {
@@ -423,41 +484,24 @@ fn local_branch_tracking() -> Result<HashMap<String, BranchTracking>, Error> {
             let has_upstream = !upstream_ref.is_empty();
             let upstream_gone = has_upstream && !remote_refs.contains(upstream_ref);
 
-            Some((
-                branch.to_owned(),
-                BranchTracking {
-                    has_upstream,
-                    upstream_gone,
-                },
-            ))
+            Some(LocalBranch {
+                name: branch.to_owned(),
+                has_upstream,
+                upstream_gone,
+            })
         })
         .collect())
 }
 
 #[cfg(test)]
 mod test {
-    use super::{format_preview_list, Branches, PREVIEW_BRANCH_LIMIT};
-
-    #[test]
-    fn test_branches_new() {
-        let input = vec!["branch1".to_owned(), "branch2".to_owned()];
-        let branches = Branches::new(input);
-
-        assert_eq!(
-            vec!["branch1".to_owned(), "branch2".to_owned()],
-            branches.vec
-        );
-    }
+    use super::{format_preview_list, PREVIEW_BRANCH_LIMIT};
 
     #[test]
     fn test_format_preview_uses_bullets() {
         let input = vec!["branch1".to_owned(), "branch2".to_owned()];
-        let branches = Branches::new(input);
 
-        assert_eq!(
-            "  - branch1\n  - branch2",
-            format_preview_list(&branches.vec)
-        );
+        assert_eq!("  - branch1\n  - branch2", format_preview_list(&input));
     }
 
     #[test]
@@ -465,8 +509,7 @@ mod test {
         let input = (0..(PREVIEW_BRANCH_LIMIT + 3))
             .map(|i| format!("branch-{i}"))
             .collect::<Vec<String>>();
-        let branches = Branches::new(input);
-        let output = format_preview_list(&branches.vec);
+        let output = format_preview_list(&input);
 
         assert!(output.contains("  - branch-0"));
         assert!(output.contains(&format!("  - branch-{}", PREVIEW_BRANCH_LIMIT - 1)));

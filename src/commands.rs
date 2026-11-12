@@ -79,24 +79,25 @@ pub fn delete_local_branches(branches: &Branches) -> Result<String, Error> {
     //
     // So we can work without xargs.
     if branches.vec.is_empty() {
-        Ok(String::default())
-    } else {
-        let delete_branches_args =
-            branches
-                .vec
-                .iter()
-                .fold(vec!["git", "branch", "-D"], |mut acc, b| {
-                    acc.push(b);
-                    acc
-                });
-        let delete_branches_cmd = run_command(&delete_branches_args)?;
-        String::from_utf8(delete_branches_cmd.stdout).map_err(|source| {
-            Error::CommandOutputEncoding {
-                command: command_to_string(&delete_branches_args),
-                source,
-            }
-        })
+        return Ok(String::default());
     }
+
+    let mut rows = Vec::with_capacity(branches.worktrees.len() + 1);
+    for path in &branches.worktrees {
+        run_command(&["git", "worktree", "remove", path])?;
+        rows.push(format!("Removed worktree {path}"));
+    }
+
+    let delete_branches_args =
+        branches
+            .vec
+            .iter()
+            .fold(vec!["git", "branch", "-D"], |mut acc, b| {
+                acc.push(b);
+                acc
+            });
+    rows.push(output(&delete_branches_args)?);
+    Ok(rows.join("\n"))
 }
 
 pub fn delete_remote_branches(branches: &Branches, options: &Options) -> Result<String, Error> {
@@ -109,7 +110,7 @@ pub fn delete_remote_branches(branches: &Branches, options: &Options) -> Result<
         }
     })?;
     let all_remote_branches = s.split('\n').collect::<Vec<&str>>();
-    let origin_for_trim = &format!("{}/", &options.remote)[..];
+    let origin_for_trim = &format!("{}/", options.remote)[..];
     let b_tree_remotes = all_remote_branches
         .iter()
         .map(|b| b.trim().trim_start_matches(origin_for_trim).to_owned())

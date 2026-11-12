@@ -3,6 +3,19 @@
 ### Changes
 - Don't delete unpushed branches by default - by @tpilewicz
 
+## [0.11.0](https://github.com/aaronflorey/git-clean/compare/v0.10.1...v0.11.0) (2026-11-12)
+
+
+### Features
+
+* surface errors from git ([88c49bb](https://github.com/aaronflorey/git-clean/commit/88c49bb08e54b1ad7d59839cb0c30747cf71f2e9))
+
+
+### Bug Fixes
+
+* clean up branches checked out in worktrees ([53f1df8](https://github.com/aaronflorey/git-clean/commit/53f1df8d7a0a6c73a1a663e000051ee33ff2737e))
+* list remote branches from refs instead of `git branch -r` ([c50b7ed](https://github.com/aaronflorey/git-clean/commit/c50b7edefa6d73de4efa38dfeae8597eaabf63a7))
+
 ## [0.10.1](https://github.com/aaronflorey/git-clean/compare/v0.10.0...v0.10.1) (2026-03-27)
 
 
